@@ -14,6 +14,7 @@ omarchy plugin add https://github.com/JJDizz1L/dizziee.system-stats.git --enable
 ```
 
 Then place it in your bar layout with `omarchy bar plugin add dizziee.system-stats [--section <left|center|right>]`.
+Suggested placement: `omarchy bar plugin add dizziee.system-stats --section right`.
 
 You can validate the plugin at any time with:
 
@@ -22,6 +23,7 @@ omarchy plugin validate ~/.config/omarchy/plugins/dizziee.system-stats
 ```
 
 ## Configuration
+Configuration lives in `~/.config/omarchy/shell.json`.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
