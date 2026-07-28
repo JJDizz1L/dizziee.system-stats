@@ -10,10 +10,16 @@ CPU, GPU, memory, and storage monitor for the Omarchy bar. Displays real-time us
 ## Installation
 
 ```sh
-git clone https://github.com/JJDizz1L/dizziee.system-stats.git ~/.config/omarchy/plugins/dizziee.system-stats
+omarchy plugin add https://github.com/JJDizz1L/dizziee.system-stats.git --enable
 ```
 
-Then enable **System Stats** in the Omarchy bar widget settings.
+Then place it in your bar layout with `omarchy bar plugin add dizziee.system-stats [--section <left|center|right>]`.
+
+You can validate the plugin at any time with:
+
+```sh
+omarchy plugin validate ~/.config/omarchy/plugins/dizziee.system-stats
+```
 
 ## Configuration
 
