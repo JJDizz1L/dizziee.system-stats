@@ -36,6 +36,10 @@ Configuration lives in `~/.config/omarchy/shell.json`.
 | `compartments.storage.enabled` | boolean | true | Show storage usage |
 | `compartments.storage.pollIntervalSec` | integer | 30 | Storage poll interval |
 
+## Preview
+
+![preview](preview.png)
+
 ## License
 
 MIT
