@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "dizziee.system-stats",
+  "name": "System Stats",
+  "version": "1.0.0",
+  "author": "Dizziee",
+  "license": "MIT",
+  "description": "CPU, GPU, Memory, and Storage monitor with per-compartment toggles.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "System Stats",
+    "description": "Hardware monitoring for CPU, GPU, memory, and storage.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaults": {
+      "compartments": {
+        "cpu": { "enabled": true, "pollIntervalSec": 30 },
+        "gpu": { "enabled": false, "pollIntervalSec": 30 },
+        "memory": { "enabled": true, "pollIntervalSec": 30 },
+        "storage": { "enabled": true, "pollIntervalSec": 30 }
+      }
+    },
+    "schema": [
+      {
+        "key": "compartments",
+        "type": "object",
+        "label": "Compartments",
+        "description": "Per-compartment settings",
+        "options": [
+          {
+            "key": "cpu",
+            "label": "CPU",
+            "type": "object",
+            "options": [
+              { "key": "enabled", "type": "boolean", "label": "Enabled", "defaultValue": true },
+              { "key": "pollIntervalSec", "type": "integer", "label": "Poll interval (seconds)", "min": 5, "max": 3600, "step": 5, "defaultValue": 30 }
+            ]
+          },
+          {
+            "key": "gpu",
+            "label": "GPU",
+            "type": "object",
+            "options": [
+              { "key": "enabled", "type": "boolean", "label": "Enabled", "defaultValue": false },
+              { "key": "pollIntervalSec", "type": "integer", "label": "Poll interval (seconds)", "min": 5, "max": 3600, "step": 5, "defaultValue": 30 }
+            ]
+          },
+          {
+            "key": "memory",
+            "label": "Memory",
+            "type": "object",
+            "options": [
+              { "key": "enabled", "type": "boolean", "label": "Enabled", "defaultValue": true },
+              { "key": "pollIntervalSec", "type": "integer", "label": "Poll interval (seconds)", "min": 5, "max": 3600, "step": 5, "defaultValue": 30 }
+            ]
+          },
+          {
+            "key": "storage",
+            "label": "Storage",
+            "type": "object",
+            "options": [
+              { "key": "enabled", "type": "boolean", "label": "Enabled", "defaultValue": true },
+              { "key": "pollIntervalSec", "type": "integer", "label": "Poll interval (seconds)", "min": 5, "max": 3600, "step": 5, "defaultValue": 30 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
