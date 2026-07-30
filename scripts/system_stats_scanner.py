@@ -236,9 +236,50 @@ def gpu_name() -> str:
     return "GPU"
 
 
+def gpu_nvidia() -> dict[str, Any] | None:
+    # /sys/class/drm/*/device/{gpu_busy_percent,mem_info_vram_*} is an
+    # AMDGPU-only sysfs interface -- the NVIDIA driver never populates it, so
+    # collect_gpu() falls back here instead of reporting unavailable.
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        parts = [p.strip() for p in result.stdout.strip().splitlines()[0].split(",")]
+        if len(parts) < 6:
+            return None
+        name, util, temp, mem_used, mem_total, power = parts
+        return {
+            "available": True,
+            "name": name,
+            "usagePct": int(float(util)),
+            "temp": int(float(temp)),
+            # nvidia-smi reports MiB; divide by 1024 (not 1e9-scaled bytes)
+            # so a 16 GiB card reads "~15.9", matching how it's marketed and
+            # how nvidia-smi itself displays it -- not the technically-true
+            # but confusing 17.1 decimal GB.
+            "vramUsedGb": round(float(mem_used) / 1024, 1),
+            "vramTotalGb": round(float(mem_total) / 1024, 1),
+            "power": round(float(power), 1),
+        }
+    except Exception:
+        return None
+
+
 def collect_gpu() -> dict[str, Any]:
     vram_used, vram_total = gpu_vram()
     if vram_total == 0 and gpu_busy() == 0:
+        nvidia = gpu_nvidia()
+        if nvidia is not None:
+            return nvidia
         return {"available": False, "usagePct": 0, "temp": 0, "vramUsedGb": 0, "vramTotalGb": 0, "name": ""}
     return {
         "available": True,
