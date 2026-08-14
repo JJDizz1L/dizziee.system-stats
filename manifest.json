@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "dizziee.system-stats",
   "name": "System Stats",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Dizziee",
   "license": "MIT",
   "description": "CPU, GPU, Memory, and Storage monitor with per-compartment toggles.",

@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
@@ -216,6 +215,9 @@ Panel {
       startCompartmentTimers()
       refresh()
       loadCompartments()
+      prevCpuStats = null
+      fileMeminfo.reload()
+      fileStat.reload()
     } else {
       settingsMode = false
       idleTimer.restart()
@@ -324,9 +326,9 @@ Panel {
   Timer {
     id: memCpuTimer
     interval: 3000
-    running: true
+    running: root.opened && (Model.compartmentEnabled(root.compartmentsConfig, "memory")
+      || Model.compartmentEnabled(root.compartmentsConfig, "cpu"))
     repeat: true
-    triggeredOnStart: true
     onTriggered: {
       fileMeminfo.reload()
       fileStat.reload()
