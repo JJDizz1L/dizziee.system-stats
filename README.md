@@ -4,9 +4,9 @@ CPU, GPU, memory, and storage monitor for the Omarchy bar. Displays real-time us
 
 ## Requirements
 
-```
-lspci, python, nvidia-smi
-```
+- Python 3
+- `lspci` (for GPU name detection)
+- NVIDIA needs `nvidia-utils`
 
 ## Installation
 
