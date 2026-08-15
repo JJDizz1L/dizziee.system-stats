@@ -6,6 +6,7 @@ CPU, GPU, memory, and storage monitor for the Omarchy bar. Displays real-time us
 
 - Python 3
 - `lspci` (for GPU name detection)
+- `nvidia-smi` (for NVIDIA GPU stats)
 
 ## Installation
 
@@ -32,13 +33,19 @@ Configuration lives in `~/.config/omarchy/shell.json`.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `compartments.cpu.enabled` | boolean | true | Show CPU usage |
+| `compartments.cpu.enabled` | boolean | true | Show CPU usage in panel |
+| `compartments.cpu.showInBar` | boolean | false | Show CPU stats on bar |
+| `compartments.cpu.barDisplay` | string (`usage`, `temp`, `both`) | `usage` | CPU metric to show in bar |
 | `compartments.cpu.pollIntervalSec` | integer | 30 | CPU poll interval |
-| `compartments.gpu.enabled` | boolean | false | Show GPU usage |
+| `compartments.gpu.enabled` | boolean | true | Show GPU usage in panel |
+| `compartments.gpu.showInBar` | boolean | false | Show GPU stats on bar |
+| `compartments.gpu.barDisplay` | string (`usage`, `temp`, `both`) | `usage` | GPU metric to show in bar |
 | `compartments.gpu.pollIntervalSec` | integer | 30 | GPU poll interval |
-| `compartments.memory.enabled` | boolean | true | Show memory usage |
+| `compartments.memory.enabled` | boolean | true | Show memory usage in panel |
+| `compartments.memory.showInBar` | boolean | false | Show memory stats on bar |
 | `compartments.memory.pollIntervalSec` | integer | 30 | Memory poll interval |
-| `compartments.storage.enabled` | boolean | true | Show storage usage |
+| `compartments.storage.enabled` | boolean | true | Show storage usage in panel |
+| `compartments.storage.showInBar` | boolean | false | Show storage stats on bar |
 | `compartments.storage.pollIntervalSec` | integer | 30 | Storage poll interval |
 
 ## Preview

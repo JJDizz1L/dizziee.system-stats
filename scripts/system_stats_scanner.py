@@ -28,6 +28,28 @@ def read_float(path: str) -> float | None:
         return None
 
 
+def safe_int(val: Any, default: int = 0) -> int:
+    try:
+        if isinstance(val, str):
+            val = val.strip()
+            if not val or val.lower().startswith(("[n/a]", "n/a", "[not supported]", "not supported")):
+                return default
+        return int(float(val))
+    except Exception:
+        return default
+
+
+def safe_float(val: Any, default: float = 0.0) -> float:
+    try:
+        if isinstance(val, str):
+            val = val.strip()
+            if not val or val.lower().startswith(("[n/a]", "n/a", "[not supported]", "not supported")):
+                return default
+        return float(val)
+    except Exception:
+        return default
+
+
 # ---------------------------------------------------------------- CPU
 
 def cpu_name() -> str:
@@ -186,7 +208,7 @@ def clean_gpu_name(name: str) -> str:
     bracket_match = re.findall(r"\[([^\]]+)\]", name)
     product = None
     for bracket in bracket_match:
-        if any(kw in bracket for kw in ["Radeon", "GeForce", "RX", "RTX", "GTX", "Arc"]):
+        if any(kw in bracket for kw in ["Radeon", "GeForce", "RX", "RTX", "GTX", "Arc", "Quadro", "Tesla"]):
             product = bracket
             break
     if not product and bracket_match:
@@ -196,7 +218,7 @@ def clean_gpu_name(name: str) -> str:
             variants = [v.strip() for v in product.split("/")]
             xt = [v for v in variants if "XT" in v or "XTX" in v]
             selected = max(xt, key=len) if xt else max(variants, key=len)
-            if not selected.lower().startswith(("radeon", "geforce", "rx", "rtx", "gtx", "intel", "arc")):
+            if not selected.lower().startswith(("radeon", "geforce", "rx", "rtx", "gtx", "intel", "arc", "quadro", "tesla")):
                 first_variant = variants[0]
                 first_words = first_variant.split()
                 prefix_parts = []
@@ -210,13 +232,13 @@ def clean_gpu_name(name: str) -> str:
             product = selected
         name = product
     name = re.sub(r"[\[\]]", "", name)
-    name = re.sub(r"^(AMD/ATI|ATI|Advanced Micro Devices, Inc\.?)\s*", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"^(AMD/ATI|ATI|Advanced Micro Devices, Inc\.?|NVIDIA Corporation)\s*", "", name, flags=re.IGNORECASE)
     name = name.strip()
     if not name:
         return ""
     if "radeon" in name.lower() or "navi" in name.lower():
         name = f"AMD {name}" if not name.lower().startswith("amd ") else name
-    elif any(kw in name.lower() for kw in ["geforce", "rtx", "gtx", "nvidia"]):
+    elif any(kw in name.lower() for kw in ["geforce", "rtx", "gtx", "nvidia", "quadro", "tesla"]):
         name = f"NVIDIA {name}" if not name.lower().startswith("nvidia ") else name
     return " ".join(name.split())
 
@@ -225,7 +247,7 @@ def gpu_name() -> str:
     try:
         result = subprocess.run(["lspci"], capture_output=True, text=True, timeout=3)
         for line in result.stdout.splitlines():
-            if "VGA" in line or "Display" in line:
+            if "VGA" in line or "Display" in line or "3D" in line:
                 parts = line.split(": ", 1)
                 if len(parts) >= 2:
                     name = clean_gpu_name(parts[1].strip())
@@ -236,18 +258,102 @@ def gpu_name() -> str:
     return "GPU"
 
 
-def collect_gpu() -> dict[str, Any]:
+def collect_amd_gpu() -> dict[str, Any] | None:
     vram_used, vram_total = gpu_vram()
-    if vram_total == 0 and gpu_busy() == 0:
-        return {"available": False, "usagePct": 0, "temp": 0, "vramUsedGb": 0, "vramTotalGb": 0, "name": ""}
+    busy = gpu_busy()
+    temp = gpu_temp()
+    power = gpu_power()
+    if vram_total == 0 and busy == 0 and temp == 0:
+        return None
     return {
         "available": True,
         "name": gpu_name(),
-        "usagePct": gpu_busy(),
-        "temp": gpu_temp(),
+        "usagePct": busy,
+        "temp": temp,
         "vramUsedGb": vram_used,
         "vramTotalGb": vram_total,
-        "power": gpu_power(),
+        "power": power,
+    }
+
+
+def collect_nvidia_gpu() -> dict[str, Any] | None:
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+
+        candidates: list[dict[str, Any]] = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) < 5:
+                continue
+            raw_name = parts[0]
+            usage = safe_int(parts[1])
+            temp = safe_int(parts[2])
+            mem_used_mib = safe_float(parts[3])
+            mem_total_mib = safe_float(parts[4])
+            power = round(safe_float(parts[5]), 1) if len(parts) >= 6 else 0.0
+
+            vram_used = round(mem_used_mib / 1024, 1)
+            vram_total = round(mem_total_mib / 1024, 1)
+
+            name = clean_gpu_name(raw_name)
+            if not name:
+                name = raw_name
+
+            if vram_total == 0 and usage == 0 and temp == 0:
+                continue
+
+            candidates.append({
+                "available": True,
+                "name": name,
+                "usagePct": usage,
+                "temp": temp,
+                "vramUsedGb": vram_used,
+                "vramTotalGb": vram_total,
+                "power": power,
+            })
+
+        if candidates:
+            return max(candidates, key=lambda g: g["vramTotalGb"])
+    except Exception:
+        pass
+    return None
+
+
+def collect_gpu() -> dict[str, Any]:
+    amd_data = collect_amd_gpu()
+    nvidia_data = collect_nvidia_gpu()
+
+    if amd_data and nvidia_data:
+        if nvidia_data.get("vramTotalGb", 0) >= amd_data.get("vramTotalGb", 0):
+            return nvidia_data
+        return amd_data
+    if nvidia_data:
+        return nvidia_data
+    if amd_data:
+        return amd_data
+
+    return {
+        "available": False,
+        "name": "",
+        "usagePct": 0,
+        "temp": 0,
+        "vramUsedGb": 0,
+        "vramTotalGb": 0,
+        "power": 0.0,
     }
 
 
