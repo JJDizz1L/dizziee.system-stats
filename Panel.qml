@@ -25,10 +25,27 @@ Panel {
 
   readonly property var compartmentIds: ["cpu", "gpu", "memory", "storage"]
 
+  readonly property bool hasBarWidgets: {
+    for (var i = 0; i < compartmentIds.length; i++) {
+      if (Model.compartmentBarEnabled(compartmentsConfig, compartmentIds[i])) return true
+    }
+    return false
+  }
+
+  readonly property string computedBarText: {
+    if (hasBarWidgets) {
+      var text = Model.formatBarText(compartmentsConfig, statsData)
+      return text !== "" ? text : barIcon
+    }
+    return barIcon
+  }
+
   function refresh() {
     if (Model.compartmentEnabled(compartmentsConfig, "cpu") && !cpuProc.running) cpuProc.running = true
     if (Model.compartmentEnabled(compartmentsConfig, "gpu") && !gpuProc.running) gpuProc.running = true
     if (Model.compartmentEnabled(compartmentsConfig, "storage") && !storageProc.running) storageProc.running = true
+    fileMeminfo.reload()
+    fileStat.reload()
   }
 
   function mergeCompartment(id, raw) {
@@ -102,7 +119,15 @@ Panel {
       var merged = {}
       var defaults = Model.defaultCompartments()
       for (var id in defaults) {
-        merged[id] = fromSettings[id] || defaults[id]
+        var cur = fromSettings[id] || {}
+        merged[id] = {
+          enabled: cur.enabled !== undefined ? cur.enabled === true : defaults[id].enabled,
+          showInBar: cur.showInBar !== undefined ? cur.showInBar === true : defaults[id].showInBar,
+          barDisplay: (cur.barDisplay === "temp" || cur.barDisplay === "both" || cur.barDisplay === "usage")
+            ? cur.barDisplay
+            : (defaults[id].barDisplay || "usage"),
+          pollIntervalSec: typeof cur.pollIntervalSec === "number" ? cur.pollIntervalSec : defaults[id].pollIntervalSec
+        }
       }
       compartmentsConfig = merged
     } else {
@@ -124,6 +149,12 @@ Panel {
       var c = next.compartments[id]
       if (typeof c !== "object") c = {}
       c.enabled = c.enabled === true
+      c.showInBar = c.showInBar === true
+      if (defaults[id].barDisplay !== undefined) {
+        c.barDisplay = (c.barDisplay === "temp" || c.barDisplay === "both" || c.barDisplay === "usage")
+          ? c.barDisplay
+          : "usage"
+      }
       c.pollIntervalSec = Math.max(5, Math.min(3600, Math.round(c.pollIntervalSec || 30)))
       next.compartments[id] = c
     }
@@ -153,7 +184,8 @@ Panel {
     compartmentsConfig = next.compartments
     root.settings = { compartments: next.compartments }
     applyTimer()
-    if (opened) startCompartmentTimers()
+    startCompartmentTimers()
+    if (hasBarWidgets) refresh()
     if (canPersistSettings()) {
       bar.shell.updateEntryInline(root.moduleName, { compartments: next.compartments })
       settingsStatusText = "Saved to shell.json"
@@ -168,8 +200,35 @@ Panel {
 
   function setDraftEnabled(id, value) {
     var next = cloneObject(draftCompartments, {})
-    if (!next[id]) next[id] = { enabled: false, pollIntervalSec: 30 }
+    if (!next[id]) next[id] = { enabled: false, showInBar: false, barDisplay: "usage", pollIntervalSec: 30 }
     next[id].enabled = value === true
+    draftCompartments = next
+  }
+
+  function draftBarEnabled(id) {
+    return draftCompartments && draftCompartments[id] ? draftCompartments[id].showInBar === true : false
+  }
+
+  function setDraftBarEnabled(id, value) {
+    var next = cloneObject(draftCompartments, {})
+    if (!next[id]) next[id] = { enabled: false, showInBar: false, barDisplay: "usage", pollIntervalSec: 30 }
+    next[id].showInBar = value === true
+    if (value === true && !next[id].enabled) {
+      next[id].enabled = true
+    }
+    draftCompartments = next
+  }
+
+  function draftBarDisplay(id) {
+    return draftCompartments && draftCompartments[id] && draftCompartments[id].barDisplay
+      ? draftCompartments[id].barDisplay
+      : "usage"
+  }
+
+  function setDraftBarDisplay(id, value) {
+    var next = cloneObject(draftCompartments, {})
+    if (!next[id]) next[id] = { enabled: false, showInBar: true, barDisplay: "usage", pollIntervalSec: 30 }
+    next[id].barDisplay = (value === "temp" || value === "both" || value === "usage") ? value : "usage"
     draftCompartments = next
   }
 
@@ -179,7 +238,7 @@ Panel {
 
   function setDraftInterval(id, value) {
     var next = cloneObject(draftCompartments, {})
-    if (!next[id]) next[id] = { enabled: false, pollIntervalSec: 30 }
+    if (!next[id]) next[id] = { enabled: false, showInBar: false, barDisplay: "usage", pollIntervalSec: 30 }
     next[id].pollIntervalSec = Math.max(5, Math.min(3600, Math.round(value)))
     draftCompartments = next
   }
@@ -191,9 +250,9 @@ Panel {
   }
 
   function startCompartmentTimers() {
-    cpuTimer.running = opened && Model.compartmentEnabled(compartmentsConfig, "cpu")
-    gpuTimer.running = opened && Model.compartmentEnabled(compartmentsConfig, "gpu")
-    storageTimer.running = opened && Model.compartmentEnabled(compartmentsConfig, "storage")
+    cpuTimer.running = (opened || Model.compartmentBarEnabled(compartmentsConfig, "cpu")) && Model.compartmentEnabled(compartmentsConfig, "cpu")
+    gpuTimer.running = (opened || Model.compartmentBarEnabled(compartmentsConfig, "gpu")) && Model.compartmentEnabled(compartmentsConfig, "gpu")
+    storageTimer.running = (opened || Model.compartmentBarEnabled(compartmentsConfig, "storage")) && Model.compartmentEnabled(compartmentsConfig, "storage")
   }
 
   function triggerPress(button) {
@@ -220,13 +279,15 @@ Panel {
       fileStat.reload()
     } else {
       settingsMode = false
-      idleTimer.restart()
+      if (!hasBarWidgets) idleTimer.restart()
     }
   }
 
   Component.onCompleted: {
     loadCompartments()
     applyTimer()
+    startCompartmentTimers()
+    if (hasBarWidgets) refresh()
   }
 
   visible: {
@@ -317,17 +378,18 @@ Panel {
     running: false
     repeat: false
     onTriggered: {
-      cpuTimer.running = false
-      gpuTimer.running = false
-      storageTimer.running = false
+      if (!Model.compartmentBarEnabled(compartmentsConfig, "cpu")) cpuTimer.running = false
+      if (!Model.compartmentBarEnabled(compartmentsConfig, "gpu")) gpuTimer.running = false
+      if (!Model.compartmentBarEnabled(compartmentsConfig, "storage")) storageTimer.running = false
     }
   }
 
   Timer {
     id: memCpuTimer
     interval: 3000
-    running: root.opened && (Model.compartmentEnabled(root.compartmentsConfig, "memory")
-      || Model.compartmentEnabled(root.compartmentsConfig, "cpu"))
+    running: (root.opened || (root.hasBarWidgets && (Model.compartmentBarEnabled(root.compartmentsConfig, "cpu")
+      || Model.compartmentBarEnabled(root.compartmentsConfig, "memory"))))
+      && (Model.compartmentEnabled(root.compartmentsConfig, "memory") || Model.compartmentEnabled(root.compartmentsConfig, "cpu"))
     repeat: true
     onTriggered: {
       fileMeminfo.reload()
@@ -339,9 +401,9 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.barIcon
-    fixedWidth: root.bar && root.bar.vertical ? -1 : Style.space(27)
-    fixedHeight: root.bar && root.bar.vertical ? Style.space(26) : -1
+    text: root.computedBarText
+    fixedWidth: root.hasBarWidgets ? -1 : (root.bar && root.bar.vertical ? -1 : Style.space(27))
+    fixedHeight: root.hasBarWidgets ? -1 : (root.bar && root.bar.vertical ? Style.space(26) : -1)
     tooltipText: "System Stats"
     onPressed: function(b) { root.triggerPress(b) }
   }
@@ -786,6 +848,47 @@ Panel {
                   accent: Color.accent
                   fontFamily: root.fontFamily
                   onClicked: root.setDraftEnabled(modelData, !checked)
+                }
+
+                Toggle {
+                  Layout.fillWidth: true
+                  label: "Show in bar"
+                  description: draftBarEnabled(modelData) ? "Show icon and stats in the bar" : "Hidden from the bar"
+                  checked: root.draftBarEnabled(modelData)
+                  foreground: root.fg
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                  onClicked: root.setDraftBarEnabled(modelData, !checked)
+                }
+
+                RowLayout {
+                  visible: (modelData === "cpu" || modelData === "gpu") && root.draftBarEnabled(modelData)
+                  Layout.fillWidth: true
+                  spacing: Style.space(8)
+
+                  Text {
+                    text: "Bar display"
+                    color: root.fg
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    Layout.alignment: Qt.AlignVCenter
+                  }
+
+                  Item { Layout.fillWidth: true }
+
+                  ButtonGroup {
+                    options: [
+                      { value: "usage", label: "Usage" },
+                      { value: "temp", label: "Temp" },
+                      { value: "both", label: "Both" }
+                    ]
+                    value: root.draftBarDisplay(modelData)
+                    foreground: root.fg
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.caption
+                    onChanged: function(val) { root.setDraftBarDisplay(modelData, val) }
+                  }
                 }
 
                 RowLayout {

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "dizziee.system-stats",
   "name": "System Stats",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Dizziee",
   "license": "MIT",
   "description": "CPU, GPU, Memory, and Storage monitor with per-compartment toggles.",
@@ -17,10 +17,10 @@
     "allowMultiple": false,
     "defaults": {
       "compartments": {
-        "cpu": { "enabled": true, "pollIntervalSec": 30 },
-        "gpu": { "enabled": false, "pollIntervalSec": 30 },
-        "memory": { "enabled": true, "pollIntervalSec": 30 },
-        "storage": { "enabled": true, "pollIntervalSec": 30 }
+        "cpu": { "enabled": true, "showInBar": false, "barDisplay": "usage", "pollIntervalSec": 30 },
+        "gpu": { "enabled": false, "showInBar": false, "barDisplay": "usage", "pollIntervalSec": 30 },
+        "memory": { "enabled": true, "showInBar": false, "pollIntervalSec": 30 },
+        "storage": { "enabled": true, "showInBar": false, "pollIntervalSec": 30 }
       }
     },
     "schema": [
@@ -36,6 +36,8 @@
             "type": "object",
             "options": [
               { "key": "enabled", "type": "boolean", "label": "Enabled", "defaultValue": true },
+              { "key": "showInBar", "type": "boolean", "label": "Show in bar", "defaultValue": false },
+              { "key": "barDisplay", "type": "enum", "label": "Bar display", "options": ["usage", "temp", "both"], "defaultValue": "usage" },
               { "key": "pollIntervalSec", "type": "integer", "label": "Poll interval (seconds)", "min": 5, "max": 3600, "step": 5, "defaultValue": 30 }
             ]
           },
@@ -45,6 +47,8 @@
             "type": "object",
             "options": [
               { "key": "enabled", "type": "boolean", "label": "Enabled", "defaultValue": false },
+              { "key": "showInBar", "type": "boolean", "label": "Show in bar", "defaultValue": false },
+              { "key": "barDisplay", "type": "enum", "label": "Bar display", "options": ["usage", "temp", "both"], "defaultValue": "usage" },
               { "key": "pollIntervalSec", "type": "integer", "label": "Poll interval (seconds)", "min": 5, "max": 3600, "step": 5, "defaultValue": 30 }
             ]
           },
@@ -54,6 +58,7 @@
             "type": "object",
             "options": [
               { "key": "enabled", "type": "boolean", "label": "Enabled", "defaultValue": true },
+              { "key": "showInBar", "type": "boolean", "label": "Show in bar", "defaultValue": false },
               { "key": "pollIntervalSec", "type": "integer", "label": "Poll interval (seconds)", "min": 5, "max": 3600, "step": 5, "defaultValue": 30 }
             ]
           },
@@ -63,6 +68,7 @@
             "type": "object",
             "options": [
               { "key": "enabled", "type": "boolean", "label": "Enabled", "defaultValue": true },
+              { "key": "showInBar", "type": "boolean", "label": "Show in bar", "defaultValue": false },
               { "key": "pollIntervalSec", "type": "integer", "label": "Poll interval (seconds)", "min": 5, "max": 3600, "step": 5, "defaultValue": 30 }
             ]
           }
