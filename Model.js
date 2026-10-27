@@ -37,6 +37,34 @@ function glyphFor(id) {
   return ""
 }
 
+const MAX_TEXT_LEN = 128
+const MAX_MOUNTS = 16
+
+function cleanDisplayText(value, maxLen) {
+  if (typeof value !== "string") return ""
+  var s = value.trim()
+  if (s.length === 0) return ""
+  var cap = typeof maxLen === "number" ? maxLen : MAX_TEXT_LEN
+  if (s.length > cap) s = s.slice(0, cap)
+  return s
+}
+
+function cleanMounts(mounts) {
+  if (!Array.isArray(mounts)) return []
+  var out = []
+  for (var i = 0; i < mounts.length && out.length < MAX_MOUNTS; i++) {
+    var m = mounts[i]
+    if (!m || typeof m !== "object") continue
+    out.push({
+      path: cleanDisplayText(m.path, 128),
+      usagePct: typeof m.usagePct === "number" ? m.usagePct : 0,
+      usedGb: typeof m.usedGb === "number" ? m.usedGb : 0,
+      totalGb: typeof m.totalGb === "number" ? m.totalGb : 0
+    })
+  }
+  return out
+}
+
 function usageColor(pct) {
   if (pct >= 75) return "#ef4444"
   if (pct >= 50) return "#eab308"
@@ -110,6 +138,10 @@ if (typeof module !== "undefined") {
     glyphFor: glyphFor,
     usageColor: usageColor,
     barDisplayMode: barDisplayMode,
-    formatBarText: formatBarText
+    formatBarText: formatBarText,
+    cleanDisplayText: cleanDisplayText,
+    cleanMounts: cleanMounts,
+    MAX_TEXT_LEN: MAX_TEXT_LEN,
+    MAX_MOUNTS: MAX_MOUNTS
   }
 }

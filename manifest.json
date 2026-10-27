@@ -15,6 +15,7 @@
     "description": "Hardware monitoring for CPU, GPU, memory, and storage.",
     "category": "System",
     "allowMultiple": false,
+    "defaultSection": "right",
     "defaults": {
       "compartments": {
         "cpu": { "enabled": true, "showInBar": false, "barDisplay": "usage", "pollIntervalSec": 30 },

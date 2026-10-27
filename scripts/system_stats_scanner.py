@@ -11,6 +11,16 @@ import re
 import subprocess
 from typing import Any
 
+MAX_TEXT_LEN = 128
+MAX_MOUNTS = 16
+
+
+def bound_text(value: Any, limit: int = MAX_TEXT_LEN) -> str:
+    if not isinstance(value, str):
+        return ""
+    s = value.strip()
+    return s[:limit] if len(s) > limit else s
+
 
 def read_int(path: str) -> int | None:
     try:
@@ -37,7 +47,7 @@ def cpu_name() -> str:
                 if "model name" in line:
                     name = line.split(":")[1].strip()
                     name = re.sub(r"\d+-Core Processor.*", "", name).strip()
-                    return name
+                    return bound_text(name)
     except Exception:
         pass
     return "CPU"
@@ -118,10 +128,10 @@ def system_power_profile() -> str:
             ["omarchy-powerprofiles-list", "--active-state"],
             capture_output=True, text=True, timeout=3
         )
-        for line in result.stdout.splitlines():
+        for line in result.stdout.splitlines()[:32]:
             parts = line.strip().split("\t")
             if len(parts) >= 2 and parts[1] == "1":
-                return parts[0]
+                return bound_text(parts[0], 64)
     except Exception:
         pass
     return ""
@@ -218,17 +228,17 @@ def clean_gpu_name(name: str) -> str:
         name = f"AMD {name}" if not name.lower().startswith("amd ") else name
     elif any(kw in name.lower() for kw in ["geforce", "rtx", "gtx", "nvidia"]):
         name = f"NVIDIA {name}" if not name.lower().startswith("nvidia ") else name
-    return " ".join(name.split())
+    return bound_text(" ".join(name.split()))
 
 
 def gpu_name() -> str:
     try:
         result = subprocess.run(["lspci"], capture_output=True, text=True, timeout=3)
-        for line in result.stdout.splitlines():
+        for line in result.stdout.splitlines()[:64]:
             if "VGA" in line or "Display" in line:
                 parts = line.split(": ", 1)
                 if len(parts) >= 2:
-                    name = clean_gpu_name(parts[1].strip())
+                    name = clean_gpu_name(bound_text(parts[1].strip(), 256))
                     if name:
                         return name
     except Exception:
@@ -259,7 +269,7 @@ def gpu_nvidia() -> dict[str, Any] | None:
         name, util, temp, mem_used, mem_total, power = parts
         return {
             "available": True,
-            "name": name,
+            "name": bound_text(name),
             "usagePct": int(float(util)),
             "temp": int(float(temp)),
             # nvidia-smi reports MiB; divide by 1024 (not 1e9-scaled bytes)
@@ -309,6 +319,8 @@ def collect_storage() -> dict[str, Any]:
     try:
         with open("/proc/self/mountinfo") as f:
             for line in f:
+                if len(raw) >= MAX_MOUNTS:
+                    break
                 parts = line.split()
                 if len(parts) < 10:
                     continue
@@ -334,7 +346,7 @@ def collect_storage() -> dict[str, Any]:
 
                     pct = round(used / total * 100, 1) if total > 0 else 0
                     raw.append({
-                        "path": os.path.normpath(mountpoint),
+                        "path": bound_text(os.path.normpath(mountpoint)),
                         "usagePct": pct,
                         "usedGb": round(used / 1_000_000_000, 1),
                         "totalGb": round(total / 1_000_000_000, 1),

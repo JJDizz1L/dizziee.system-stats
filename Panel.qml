@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -19,11 +20,28 @@ Panel {
   property var prevCpuStats: null
 
   readonly property string barIcon: "󰵃"
-  readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
+  readonly property color fg: root.bar ? root.bar.foreground : Commons.Color.foreground
   readonly property color dim: Qt.darker(fg, 1.45)
   readonly property string fontFamily: root.bar ? root.bar.fontFamily : "JetBrainsMono Nerd Font"
 
   readonly property var compartmentIds: ["cpu", "gpu", "memory", "storage"]
+
+  Commons.Translations {
+    id: strings
+    directory: Qt.resolvedUrl("i18n")
+  }
+
+  function compartmentName(id) {
+    if (id === "cpu") return strings.t("stats.cpu")
+    if (id === "gpu") return strings.t("stats.gpu")
+    if (id === "memory") return strings.t("stats.memory")
+    if (id === "storage") return strings.t("stats.storage")
+    return String(id || "")
+  }
+
+  function fmtInt(value) {
+    return Commons.I18n.formatNumber(Math.round(value || 0))
+  }
 
   readonly property bool hasBarWidgets: {
     for (var i = 0; i < compartmentIds.length; i++) {
@@ -53,7 +71,18 @@ Panel {
     if (!parsed[id]) return
     var next = {}
     for (var k in root.statsData) next[k] = root.statsData[k]
-    next[id] = parsed[id]
+    var incoming = parsed[id]
+    if (id === "storage" && incoming && typeof incoming === "object") {
+      incoming = { mounts: Model.cleanMounts(incoming.mounts) }
+    }
+    if ((id === "cpu" || id === "gpu") && incoming && typeof incoming === "object" && typeof incoming.name === "string") {
+      var bounded = {}
+      for (var ck in incoming) bounded[ck] = incoming[ck]
+      bounded.name = Model.cleanDisplayText(incoming.name, 128)
+      if (typeof incoming.governor === "string") bounded.governor = Model.cleanDisplayText(incoming.governor, 64)
+      incoming = bounded
+    }
+    next[id] = incoming
     if (root.statsData["memory"]) next["memory"] = root.statsData["memory"]
     if (root.statsData["cpu"] && root.statsData["cpu"].usagePct !== undefined && next["cpu"]) {
       next["cpu"].usagePct = root.statsData["cpu"].usagePct
@@ -188,9 +217,9 @@ Panel {
     if (hasBarWidgets) refresh()
     if (canPersistSettings()) {
       bar.shell.updateEntryInline(root.moduleName, { compartments: next.compartments })
-      settingsStatusText = "Saved to shell.json"
+      settingsStatusText = strings.t("stats.savedToShell")
     } else {
-      settingsStatusText = "Saved for this session"
+      settingsStatusText = strings.t("stats.savedForSession")
     }
   }
 
@@ -404,7 +433,7 @@ Panel {
     text: root.computedBarText
     fixedWidth: root.hasBarWidgets ? -1 : (root.bar && root.bar.vertical ? -1 : Style.space(27))
     fixedHeight: root.hasBarWidgets ? -1 : (root.bar && root.bar.vertical ? Style.space(26) : -1)
-    tooltipText: "System Stats"
+    tooltipText: strings.t("stats.title")
     onPressed: function(b) { root.triggerPress(b) }
   }
 
@@ -440,7 +469,8 @@ Panel {
           spacing: 8
 
           Text {
-            text: root.settingsMode ? "System Stats Settings" : "System Stats"
+            textFormat: Text.PlainText
+            text: root.settingsMode ? strings.t("stats.settingsTitle") : strings.t("stats.title")
             color: root.fg
             font.family: root.fontFamily
             font.pixelSize: Style.font.title
@@ -451,9 +481,9 @@ Panel {
 
           Button {
             visible: root.settingsMode
-            text: "Stats"
+            text: strings.t("stats.stats")
             foreground: root.fg
-            tooltipText: "Back to stats"
+            tooltipText: strings.t("stats.backToStats")
             fontFamily: root.fontFamily
             fontSize: Style.font.caption
             horizontalPadding: Style.spacing.controlPaddingX
@@ -463,9 +493,9 @@ Panel {
 
           Button {
             visible: root.settingsMode
-            text: "Save"
+            text: strings.t("stats.save")
             foreground: root.fg
-            tooltipText: "Save settings"
+            tooltipText: strings.t("stats.saveSettings")
             fontFamily: root.fontFamily
             fontSize: Style.font.caption
             horizontalPadding: Style.spacing.controlPaddingX
@@ -476,9 +506,9 @@ Panel {
 
           Button {
             visible: !root.settingsMode
-            text: "Refresh"
+            text: strings.t("stats.refresh")
             foreground: root.fg
-            tooltipText: "Refresh stats"
+            tooltipText: strings.t("stats.refreshStats")
             fontFamily: root.fontFamily
             fontSize: Style.font.caption
             horizontalPadding: Style.spacing.controlPaddingX
@@ -519,7 +549,8 @@ Panel {
               Layout.leftMargin: 4
               Layout.rightMargin: 4
               Text {
-                text: Model.glyphFor("cpu") + "  " + (root.statsData["cpu"].name || "CPU")
+                  textFormat: Text.PlainText
+                text: Model.glyphFor("cpu") + "  " + Model.cleanDisplayText(root.statsData["cpu"].name || compartmentName("cpu"), 128)
                 color: root.fg
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.body
@@ -527,7 +558,8 @@ Panel {
               }
               Item { Layout.fillWidth: true }
               Text {
-                text: (root.statsData["cpu"].cores || "?") + "C/" + (root.statsData["cpu"].threads || "?") + "T"
+                  textFormat: Text.PlainText
+                text: (root.statsData["cpu"].cores ? fmtInt(root.statsData["cpu"].cores) : "?") + "C/" + (root.statsData["cpu"].threads ? fmtInt(root.statsData["cpu"].threads) : "?") + "T"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -544,7 +576,8 @@ Panel {
                 barColor: Model.usageColor(root.statsData["cpu"].usagePct || 0) || root.fg
               }
               Text {
-                text: Math.round(root.statsData["cpu"].usagePct || 0) + "%"
+                  textFormat: Text.PlainText
+                text: fmtInt(root.statsData["cpu"].usagePct) + "%"
                 color: Model.usageColor(root.statsData["cpu"].usagePct || 0) || root.fg
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -558,27 +591,31 @@ Panel {
               Layout.rightMargin: 4
               spacing: Style.space(12)
               Text {
-                text: "󰔏  " + (root.statsData["cpu"].temp || 0) + "\u00B0C"
+                  textFormat: Text.PlainText
+                text: "󰔏  " + fmtInt(root.statsData["cpu"].temp) + "\u00B0C"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
               }
               Text {
-                text: "󰓅  " + (root.statsData["cpu"].freq || 0) + "GHz"
+                  textFormat: Text.PlainText
+                text: "󰓅  " + Commons.I18n.formatNumber(root.statsData["cpu"].freq || 0, 2) + "GHz"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
               }
               Text {
+                  textFormat: Text.PlainText
                 visible: (root.statsData["cpu"].governor || "") !== ""
-                text: "\u2699  " + (root.statsData["cpu"].governor || "")
+                text: "\u2699  " + Model.cleanDisplayText(root.statsData["cpu"].governor || "", 64)
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
               }
               Text {
+                  textFormat: Text.PlainText
                 visible: (root.statsData["cpu"].power || 0) > 0
-                text: "  " + (root.statsData["cpu"].power || 0) + "W"
+                text: "  " + Commons.I18n.formatNumber(root.statsData["cpu"].power || 0, 1) + "W"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -609,7 +646,8 @@ Panel {
             spacing: 8
 
             Text {
-              text: Model.glyphFor("gpu") + "  " + (root.statsData["gpu"].name || "GPU")
+                textFormat: Text.PlainText
+              text: Model.glyphFor("gpu") + "  " + Model.cleanDisplayText(root.statsData["gpu"].name || compartmentName("gpu"), 128)
               color: root.fg
               font.family: root.fontFamily
               font.pixelSize: Style.font.body
@@ -626,7 +664,8 @@ Panel {
                 barColor: Model.usageColor(root.statsData["gpu"].usagePct || 0) || root.fg
               }
               Text {
-                text: Math.round(root.statsData["gpu"].usagePct || 0) + "%"
+                  textFormat: Text.PlainText
+                text: fmtInt(root.statsData["gpu"].usagePct) + "%"
                 color: Model.usageColor(root.statsData["gpu"].usagePct || 0) || root.fg
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -640,20 +679,23 @@ Panel {
               Layout.rightMargin: 4
               spacing: Style.space(12)
               Text {
-                text: "󰔏  " + (root.statsData["gpu"].temp || 0) + "\u00B0C"
+                  textFormat: Text.PlainText
+                text: "󰔏  " + fmtInt(root.statsData["gpu"].temp) + "\u00B0C"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
               }
               Text {
+                  textFormat: Text.PlainText
                 visible: (root.statsData["gpu"].power || 0) > 0
-                text: "  " + (root.statsData["gpu"].power || 0) + "W"
+                text: "  " + Commons.I18n.formatNumber(root.statsData["gpu"].power || 0, 1) + "W"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
               }
               Text {
-                text: "󰟽  VRAM " + (root.statsData["gpu"].vramUsedGb || 0) + "/" + (root.statsData["gpu"].vramTotalGb || 0) + "GB"
+                  textFormat: Text.PlainText
+                text: "󰟽  " + strings.t("stats.vram") + " " + Commons.I18n.formatNumber(root.statsData["gpu"].vramUsedGb || 0, 1) + "/" + Commons.I18n.formatNumber(root.statsData["gpu"].vramTotalGb || 0, 1) + "GB"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -684,7 +726,8 @@ Panel {
             spacing: 8
 
             Text {
-              text: Model.glyphFor("memory") + "  Memory"
+                textFormat: Text.PlainText
+              text: Model.glyphFor("memory") + "  " + compartmentName("memory")
               color: root.fg
               font.family: root.fontFamily
               font.pixelSize: Style.font.body
@@ -701,7 +744,8 @@ Panel {
                 barColor: Model.usageColor(root.statsData["memory"].usagePct || 0) || root.fg
               }
               Text {
-                text: Math.round(root.statsData["memory"].usagePct || 0) + "%"
+                  textFormat: Text.PlainText
+                text: fmtInt(root.statsData["memory"].usagePct) + "%"
                 color: Model.usageColor(root.statsData["memory"].usagePct || 0) || root.fg
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -715,14 +759,16 @@ Panel {
               Layout.rightMargin: 4
               spacing: Style.space(12)
               Text {
-                text: Model.glyphFor("memory") + "  " + (root.statsData["memory"].usedGb || 0) + "/" + (root.statsData["memory"].totalGb || 0) + "GB"
+                  textFormat: Text.PlainText
+                text: Model.glyphFor("memory") + "  " + Commons.I18n.formatNumber(root.statsData["memory"].usedGb || 0, 1) + "/" + Commons.I18n.formatNumber(root.statsData["memory"].totalGb || 0, 1) + "GB"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
               }
               Text {
+                  textFormat: Text.PlainText
                 visible: (root.statsData["memory"].swapTotalGb || 0) > 0
-                text: "󰓡  Swap " + (root.statsData["memory"].swapUsedGb || 0) + "/" + (root.statsData["memory"].swapTotalGb || 0) + "GB"
+                text: "󰓡  " + strings.t("stats.swap") + " " + Commons.I18n.formatNumber(root.statsData["memory"].swapUsedGb || 0, 1) + "/" + Commons.I18n.formatNumber(root.statsData["memory"].swapTotalGb || 0, 1) + "GB"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -753,7 +799,8 @@ Panel {
             spacing: 8
 
             Text {
-              text: Model.glyphFor("storage") + "  Storage"
+                textFormat: Text.PlainText
+              text: Model.glyphFor("storage") + "  " + compartmentName("storage")
               color: root.fg
               font.family: root.fontFamily
               font.pixelSize: Style.font.body
@@ -781,7 +828,8 @@ Panel {
                     barColor: Model.usageColor(modelData.usagePct || 0) || root.fg
                   }
                   Text {
-                    text: Math.round(modelData.usagePct || 0) + "%"
+                      textFormat: Text.PlainText
+                    text: fmtInt(modelData.usagePct) + "%"
                     color: Model.usageColor(modelData.usagePct || 0) || root.fg
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -790,10 +838,11 @@ Panel {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                   Layout.fillWidth: true
                   Layout.leftMargin: 4
                   Layout.rightMargin: 4
-                  text: modelData.path + "  " + (modelData.usedGb || 0) + "/" + (modelData.totalGb || 0) + "GB"
+                  text: Model.cleanDisplayText(modelData.path || "", 128) + "  " + Commons.I18n.formatNumber(modelData.usedGb || 0, 1) + "/" + Commons.I18n.formatNumber(modelData.totalGb || 0, 1) + "GB"
                   color: root.dim
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
@@ -827,12 +876,7 @@ Panel {
               Layout.fillWidth: true
               title: {
                 var glyph = Model.glyphFor(modelData)
-                var name = ""
-                if (modelData === "cpu") name = "CPU"
-                else if (modelData === "gpu") name = "GPU"
-                else if (modelData === "memory") name = "Memory"
-                else if (modelData === "storage") name = "Storage"
-                return glyph + "  " + name
+                return glyph + "  " + compartmentName(modelData)
               }
 
               ColumnLayout {
@@ -841,22 +885,22 @@ Panel {
 
                 Toggle {
                   Layout.fillWidth: true
-                  label: "Enabled"
-                  description: draftEnabled(modelData) ? "Active in the stats panel" : "Hidden from the stats panel"
+                  label: strings.t("stats.enabled")
+                  description: draftEnabled(modelData) ? strings.t("stats.activeInPanel") : strings.t("stats.hiddenFromPanel")
                   checked: root.draftEnabled(modelData)
                   foreground: root.fg
-                  accent: Color.accent
+                  accent: Commons.Color.accent
                   fontFamily: root.fontFamily
                   onClicked: root.setDraftEnabled(modelData, !checked)
                 }
 
                 Toggle {
                   Layout.fillWidth: true
-                  label: "Show in bar"
-                  description: draftBarEnabled(modelData) ? "Show icon and stats in the bar" : "Hidden from the bar"
+                  label: strings.t("stats.showInBar")
+                  description: draftBarEnabled(modelData) ? strings.t("stats.showInBarActive") : strings.t("stats.hiddenFromBar")
                   checked: root.draftBarEnabled(modelData)
                   foreground: root.fg
-                  accent: Color.accent
+                  accent: Commons.Color.accent
                   fontFamily: root.fontFamily
                   onClicked: root.setDraftBarEnabled(modelData, !checked)
                 }
@@ -867,7 +911,8 @@ Panel {
                   spacing: Style.space(8)
 
                   Text {
-                    text: "Bar display"
+                      textFormat: Text.PlainText
+                    text: strings.t("stats.barDisplay")
                     color: root.fg
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -878,13 +923,13 @@ Panel {
 
                   ButtonGroup {
                     options: [
-                      { value: "usage", label: "Usage" },
-                      { value: "temp", label: "Temp" },
-                      { value: "both", label: "Both" }
+                      { value: "usage", label: strings.t("stats.usage") },
+                      { value: "temp", label: strings.t("stats.temp") },
+                      { value: "both", label: strings.t("stats.both") }
                     ]
                     value: root.draftBarDisplay(modelData)
                     foreground: root.fg
-                    accent: Color.accent
+                    accent: Commons.Color.accent
                     fontFamily: root.fontFamily
                     fontSize: Style.font.caption
                     onChanged: function(val) { root.setDraftBarDisplay(modelData, val) }
@@ -897,7 +942,8 @@ Panel {
                   spacing: Style.space(8)
 
                   Text {
-                    text: "Poll interval"
+                      textFormat: Text.PlainText
+                    text: strings.t("stats.pollInterval")
                     color: root.fg
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -915,13 +961,14 @@ Panel {
                     stepSize: 5
                     fieldWidth: 80
                     foreground: root.fg
-                    accent: Color.accent
+                    accent: Commons.Color.accent
                     fontFamily: root.fontFamily
                     onModified: function(value) { root.setDraftInterval(modelData, value) }
                   }
 
                   Text {
-                    text: "sec"
+                      textFormat: Text.PlainText
+                    text: strings.t("stats.sec")
                     color: root.dim
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -933,6 +980,7 @@ Panel {
           }
 
           Text {
+              textFormat: Text.PlainText
             visible: root.settingsStatusText !== ""
             Layout.fillWidth: true
             text: root.settingsStatusText
@@ -943,8 +991,9 @@ Panel {
           }
 
           Text {
+              textFormat: Text.PlainText
             Layout.fillWidth: true
-            text: "s saves \u00B7 esc closes"
+            text: strings.t("stats.keysHint")
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -979,6 +1028,7 @@ Panel {
       spacing: 8
 
       Text {
+          textFormat: Text.PlainText
         visible: section.title !== ""
         Layout.fillWidth: true
         text: section.title
