@@ -1063,8 +1063,8 @@ Panel {
       color: barColor
       width: Math.max(barTrack.height, barTrack.width * Math.max(0, Math.min(1, fraction)))
 
-      Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
-      Behavior on color { ColorAnimation { duration: 220 } }
+      Behavior on width { NumberAnimation { duration: Style.duration(280); easing.type: Easing.OutCubic } }
+      Behavior on color { ColorAnimation { duration: Style.duration(220) } }
     }
   }
 }
